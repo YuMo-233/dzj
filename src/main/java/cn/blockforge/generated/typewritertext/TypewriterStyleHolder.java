@@ -30,4 +30,17 @@ public interface TypewriterStyleHolder {
             holder.typewriter$setState(state);
         }
     }
+
+    /**
+     * 判等用的打字机身份：只看出字速度与逐字指令；一边有一边没有，判为不同。
+     *
+     * <p>{@code session} 与播放进度刻意不参与——session 是解码时随机生成的，同一段 JSON
+     * 生成的两件物品 session 也不同，算进身份会让本该堆叠的物品永远堆不起来。
+     */
+    static boolean sameIdentity(TypewriterState a, TypewriterState b) {
+        if (a == null || b == null) {
+            return a == b;
+        }
+        return a.ticksPerChar() == b.ticksPerChar() && a.command().equals(b.command());
+    }
 }
