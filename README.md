@@ -99,6 +99,16 @@
 纯客户端效果，服务端只当数据存/传；写进物品名、告示牌、成书一样有效。扭曲参数参与判等身份，
 所以"只差扭曲参数"的同名物品不会互相堆叠（见 [0006](docs/adr/0006-打字机身份参与样式判等.md)）。
 
+## 命令补全（NBT Autocomplete）
+
+装了 [NBT Autocomplete](https://modrinth.com/mod/nbt-autocomplete)（modid `nbtac`）时，
+本模组会把 `typewriter` / `distort` 及它们的子字段补进它给出的文本组件字段表里，于是
+`custom_name`、告示牌、hover 文本等处的 `'{"text":"…","ty` 能直接补出 `typewriter`：
+
+    /give @s minecraft:name_tag[minecraft:custom_name='{"text":"嗨","typewriter":{"time":"0.2s"}}'] 1
+
+是软兼容：没装它不受任何影响，装了也不会被它当成必需依赖。
+
 ## 从 r7 升级
 
 r7 的写法（组件内容类型）**在 r8 不再支持**，按下表改写：
