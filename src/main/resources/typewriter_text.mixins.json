@@ -1,5 +1,5 @@
 {
-  "required": false,
+  "required": true,
   "package": "cn.blockforge.generated.typewritertext.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
