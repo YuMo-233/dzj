@@ -75,7 +75,7 @@
 
     tellraw @a {"text":"别再看了","distort":{"wave":{"amplitude":2,"period":"0.8s"},"jitter":{"radius":1.2}}}
 
-    title @a title {"text":"它在靠近","color":"dark_red","shake":{"amplitude":1.5,"period":"3t"},"typewriter":{"time":"0.3s"}}
+    title @a title {"text":"它在靠近","color":"dark_red","distort":{"shake":{"amplitude":1.5,"period":"3t"}},"typewriter":{"time":"0.3s"}}
 
 `distort` 里的三个效果都可省略，全省略等同于没写这个字段（`{"distort":{}}` 与不写它完全等价）：
 
