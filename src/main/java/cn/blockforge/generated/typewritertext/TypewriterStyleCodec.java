@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * 把 {@code typewriter} 字段接进原版样式编解码。
+ * 把 {@code typewriter} 与 {@code distort} 两个字段接进原版样式编解码。
  *
  * <p>做法是给原版 {@code Style.Serializer.MAP_CODEC} 套一层：用
  * {@link RecordCodecBuilder} 把原版样式的全部字段原样摊平，再额外加一个可选的
@@ -41,13 +41,15 @@ public final class TypewriterStyleCodec {
     private TypewriterStyleCodec() {
     }
 
-    /** 包装原版样式 MapCodec，附加 {@code typewriter} 字段。 */
+    /** 包装原版样式 MapCodec，附加 {@code typewriter} 与 {@code distort} 两个字段。 */
     public static MapCodec<Style> wrap(MapCodec<Style> original) {
         installed = true;
         return RecordCodecBuilder.mapCodec(instance -> instance.group(
                 original.forGetter(Function.identity()),
                 TypewriterState.MAP_CODEC.codec().optionalFieldOf(TypewriterState.FIELD)
-                        .forGetter(style -> Optional.ofNullable(TypewriterStyleHolder.of(style)))
+                        .forGetter(style -> Optional.ofNullable(TypewriterStyleHolder.of(style))),
+                DistortSpec.MAP_CODEC.codec().optionalFieldOf(DistortSpec.FIELD)
+                        .forGetter(style -> Optional.ofNullable(DistortStyleHolder.of(style)))
         ).apply(instance, TypewriterStyleCodec::apply));
     }
 
@@ -56,8 +58,22 @@ public final class TypewriterStyleCodec {
         return installed;
     }
 
-    private static Style apply(Style style, Optional<TypewriterState> state) {
-        return state.isEmpty() ? style : attach(style, state.get());
+    /**
+     * 两个扩展字段都可省略；{@code distort} 若解析出来是空对象（一个效果都没写），
+     * 按"没写"处理，这样 {@code {"distort":{}}} 与不写它完全等价、往返也不会多出字段。
+     */
+    private static Style apply(Style style, Optional<TypewriterState> state, Optional<DistortSpec> distort) {
+        Optional<DistortSpec> effects = distort.filter(spec -> !spec.isEmpty());
+        if (state.isEmpty() && effects.isEmpty()) {
+            return style;
+        }
+        Style target = copyOf(style);
+        if (target == null) {
+            return style;
+        }
+        state.ifPresent(value -> TypewriterStyleHolder.set(target, value));
+        effects.ifPresent(value -> DistortStyleHolder.set(target, value));
+        return target;
     }
 
     /**
@@ -80,6 +96,16 @@ public final class TypewriterStyleCodec {
             return base;
         }
         TypewriterStyleHolder.set(target, state);
+        return target;
+    }
+
+    /** 在独立副本上挂载扭曲参数，供 Java API 使用（走 JSON/NBT 的话直接写 {@code distort} 字段即可）。 */
+    public static Style attachDistort(Style base, DistortSpec spec) {
+        Style target = copyOf(base);
+        if (target == null) {
+            return base;
+        }
+        DistortStyleHolder.set(target, spec);
         return target;
     }
 

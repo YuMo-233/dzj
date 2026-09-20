@@ -1,12 +1,10 @@
 package cn.blockforge.generated.typewritertext;
 
-import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,9 +43,6 @@ public final class TypewriterState {
     /** 出字速度下限：每字符 200 tick（10 秒一个字）。 */
     public static final int MAX_TICKS_PER_CHAR = 200;
 
-    /** 1 秒是多少 tick，用于把 {@code "0.25s"} 折算成 tick。 */
-    private static final double TICKS_PER_SECOND = 20.0;
-
     /** 触发指令长度上限。 */
     public static final int MAX_COMMAND = 512;
     /** 单段文字可参与逐字的最大字符数（防御异常组件）。 */
@@ -58,27 +53,12 @@ public final class TypewriterState {
                     : DataResult.error(() -> "typewriter command too long (max " + MAX_COMMAND + ")"),
             s -> s);
 
-    /** 数字写 tick 时必须整数时的提示语。 */
-    private static final String INTEGRAL_TICK_HINT =
-            "time as a number counts ticks per char and must be a whole number; "
-                    + "write seconds for fractions, e.g. \"0.25s\"";
-
-    /** 秒单位写法（大小写不敏感）。 */
-    private static boolean isSeconds(String unit) {
-        return unit.equals("s") || unit.equals("sec") || unit.equals("second") || unit.equals("seconds");
-    }
-
-    /** tick 单位写法（大小写不敏感）；空串表示“没写单位”，同样按 tick 计。 */
-    private static boolean isTicks(String unit) {
-        return unit.isEmpty() || unit.equals("t") || unit.equals("tick") || unit.equals("ticks");
-    }
-
     /**
-     * {@code time} 字段：数字按 tick 计（整数），字符串可带 {@code t}/{@code s} 单位后缀。
-     * 归一化后存的是“每字符多少 tick”。
+     * {@code time} 字段：出字速度，归一化后存的是“每字符多少 tick”。
+     * 写法（数字 / {@code "4t"} / {@code "0.25s"}）与报错口径见 {@link StyleTicks}。
      */
-    private static final Codec<Integer> TICKS_PER_CHAR = Codec.either(Codec.DOUBLE, Codec.STRING)
-            .comapFlatMap(TypewriterState::parseTime, TypewriterState::formatTime);
+    private static final Codec<Integer> TICKS_PER_CHAR =
+            StyleTicks.bounded("typewriter time", MIN_TICKS_PER_CHAR, MAX_TICKS_PER_CHAR);
 
     /** {@code typewriter} 字段的对象形态；三个字段都可省略。 */
     public static final MapCodec<TypewriterState> MAP_CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
@@ -92,51 +72,6 @@ public final class TypewriterState {
     ).apply(i, (time, command, session) -> new TypewriterState(
             time.orElse(DEFAULT_TICKS_PER_CHAR), command.orElse(""),
             session.map(TypewriterState::parseUuid).orElseGet(UUID::randomUUID))));
-
-    private static DataResult<Integer> parseTime(Either<Double, String> raw) {
-        Double number = raw.left().orElse(null);
-        if (number != null) {
-            return fromTicks(number, INTEGRAL_TICK_HINT);
-        }
-        String text = raw.right().orElse("").trim();
-        int split = 0;
-        while (split < text.length() && !Character.isLetter(text.charAt(split))) {
-            split++;
-        }
-        String amount = text.substring(0, split).trim();
-        String unit = text.substring(split).trim().toLowerCase(Locale.ROOT);
-        double value;
-        try {
-            value = Double.parseDouble(amount);
-        } catch (NumberFormatException e) {
-            return DataResult.error(() -> "typewriter time is not a number: \"" + text + "\"");
-        }
-        if (isSeconds(unit)) {
-            return fromTicks(value * TICKS_PER_SECOND, null);
-        }
-        if (!isTicks(unit)) {
-            return DataResult.error(() -> "typewriter time unit must be t (ticks) or s (seconds), got \"" + unit + "\"");
-        }
-        return fromTicks(value, INTEGRAL_TICK_HINT);
-    }
-
-    /** 归一化成每字符 tick 数并做范围校验；{@code integralHint} 非空时要求整数 tick。 */
-    private static DataResult<Integer> fromTicks(double ticks, String integralHint) {
-        if (integralHint != null && ticks != Math.rint(ticks)) {
-            return DataResult.error(() -> "typewriter " + integralHint);
-        }
-        long rounded = Math.round(ticks);
-        if (rounded < MIN_TICKS_PER_CHAR || rounded > MAX_TICKS_PER_CHAR) {
-            return DataResult.error(() -> "typewriter time must be between " + MIN_TICKS_PER_CHAR
-                    + " and " + MAX_TICKS_PER_CHAR + " ticks per char (got " + rounded + ")");
-        }
-        return DataResult.success((int) rounded);
-    }
-
-    /** 写回 JSON/NBT 的规范形态：一律是带 {@code t} 单位的 tick 数。 */
-    private static Either<Double, String> formatTime(int ticksPerChar) {
-        return Either.right(ticksPerChar + "t");
-    }
 
     private static UUID parseUuid(String raw) {
         try {
