@@ -5,7 +5,6 @@ import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -33,21 +32,21 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter, Optional
     /** 波浪：位移 = amplitude × sin(2π × (时间/period + 像素横坐标/wavelength))。 */
     public record Wave(double amplitude, int period, int wavelength, boolean vertical) {
         static final MapCodec<Wave> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
-                pixels("typewriter wave amplitude").optionalFieldOf("amplitude", 2.0).forGetter(Wave::amplitude),
+                DistortParams.pixels("typewriter wave amplitude").optionalFieldOf("amplitude", 2.0).forGetter(Wave::amplitude),
                 StyleTicks.bounded("typewriter wave period", 1, 1200)
                         .optionalFieldOf("period", 20).forGetter(Wave::period),
                 Codec.INT.validate(v -> v >= 1 && v <= 512
                                 ? DataResult.success(v)
                                 : DataResult.error(() -> "typewriter wave wavelength must be in 1..512 (got " + v + ")"))
                         .optionalFieldOf("wavelength", 24).forGetter(Wave::wavelength),
-                direction().optionalFieldOf("direction", Boolean.TRUE).forGetter(Wave::vertical)
+                DistortParams.direction().optionalFieldOf("direction", Boolean.TRUE).forGetter(Wave::vertical)
         ).apply(i, Wave::new));
     }
 
     /** 漂移：在半径内缓慢游动，随机但平滑。 */
     public record Jitter(double radius, int period) {
         static final MapCodec<Jitter> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
-                pixels("typewriter jitter radius").optionalFieldOf("radius", 1.5).forGetter(Jitter::radius),
+                DistortParams.pixels("typewriter jitter radius").optionalFieldOf("radius", 1.5).forGetter(Jitter::radius),
                 StyleTicks.bounded("typewriter jitter period", 1, 1200)
                         .optionalFieldOf("period", 50).forGetter(Jitter::period)
         ).apply(i, Jitter::new));
@@ -56,7 +55,7 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter, Optional
     /** 抖动：高频大幅度，带噪点感。 */
     public record Shake(double amplitude, int period) {
         static final MapCodec<Shake> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
-                pixels("typewriter shake amplitude").optionalFieldOf("amplitude", 1.0).forGetter(Shake::amplitude),
+                DistortParams.pixels("typewriter shake amplitude").optionalFieldOf("amplitude", 1.0).forGetter(Shake::amplitude),
                 StyleTicks.bounded("typewriter shake period", 1, 1200)
                         .optionalFieldOf("period", 3).forGetter(Shake::period)
         ).apply(i, Shake::new));
@@ -71,21 +70,5 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter, Optional
     /** 三个效果都没写：等同没有扭曲样式。 */
     public boolean isEmpty() {
         return wave.isEmpty() && jitter.isEmpty() && shake.isEmpty();
-    }
-
-    /** 像素幅度：允许小数，范围 0.1–32。 */
-    private static Codec<Double> pixels(String label) {
-        return Codec.DOUBLE.validate(v -> v >= 0.1 && v <= 32.0
-                ? DataResult.success(v)
-                : DataResult.error(() -> label + " must be in 0.1..32 (got " + v + ")"));
-    }
-
-    /** {@code "y"}（默认，上下摆）/ {@code "x"}（左右摆），大小写不敏感。 */
-    private static Codec<Boolean> direction() {
-        return Codec.STRING.comapFlatMap(raw -> switch (raw.trim().toLowerCase(Locale.ROOT)) {
-            case "y", "vertical" -> DataResult.success(Boolean.TRUE);
-            case "x", "horizontal" -> DataResult.success(Boolean.FALSE);
-            default -> DataResult.error(() -> "typewriter wave direction must be \"x\" or \"y\", got \"" + raw + "\"");
-        }, vertical -> vertical ? "y" : "x");
     }
 }

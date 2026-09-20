@@ -1,10 +1,7 @@
 package cn.blockforge.generated.typewritertext;
 
-import net.minecraft.Util;
-import net.minecraft.network.chat.Style;
-
 /**
- * 扭曲样式的逐字形位移计算（纯客户端，服务端不参与）。
+ * 扭曲样式的逐字形位移计算（纯函数，服务端不参与）。
  *
  * <p>挂载点是 {@code Font$StringRenderOutput#accept}（见 {@code FontStringRenderOutputMixin}）：
  * 每画一个字调一次，参数给到"这个字形生效的样式""它在文本段里的下标""它在行内的像素横坐标"。
@@ -16,7 +13,7 @@ import net.minecraft.network.chat.Style;
  *       不会一帧一个样地闪。</li>
  * </ul>
  *
- * <p>时间基准是 {@link Util#getMillis()}（毫秒），配置里的周期按 tick 记（1 tick = 50ms）。
+ * <p>时间基准是毫秒（配置里的周期按 tick 记，1 tick = 50ms），由调用方传入。
  */
 public final class DistortRender {
 
@@ -31,14 +28,19 @@ public final class DistortRender {
     private DistortRender() {
     }
 
-    /** 计算某个字形该偏移多少；样式上没有扭曲参数时返回 {@link Offset#NONE}。 */
-    public static Offset at(Style style, int index, float cursorX) {
-        DistortSpec spec = DistortStyleHolder.of(style);
+    /**
+     * 计算某个字形该偏移多少；{@code spec} 为 null（样式上没有扭曲参数）时返回 {@link Offset#NONE}。
+     *
+     * <p>{@code millis} 由调用方传入（客户端用 {@code Util.getMillis()}），这样本方法是纯函数、
+     * 可以脱离游戏做确定性验证。
+     *
+     * @param index   字符在所在文本段里的下标，用于给随机类效果取固定种子
+     * @param cursorX 字形在行内的像素横坐标，用于给波浪取空间相位
+     */
+    public static Offset at(DistortSpec spec, int index, float cursorX, double millis) {
         if (spec == null) {
             return Offset.NONE;
         }
-        double millis = Util.getMillis();
-        long seed = spec.hashCode() * 31L + index;
         double dx = 0.0;
         double dy = 0.0;
 
@@ -52,14 +54,18 @@ public final class DistortRender {
                 dx += value;
             }
         }
+        // 随机类效果的种子只跟"这个效果自己的参数 + 字符下标"有关：这样加一个 shake 不会把
+        // jitter 原本的游动方式改掉，多个效果叠加严格等于各自位移相加。
         if (spec.jitter().isPresent()) {
             DistortSpec.Jitter jitter = spec.jitter().get();
+            long seed = jitter.hashCode() * 31L + index;
             double omega = TAU / ticksToMillis(jitter.period());
             dx += jitter.radius() * smooth(millis, omega, seed);
             dy += jitter.radius() * smooth(millis, omega, seed + 0x9E3779B9L);
         }
         if (spec.shake().isPresent()) {
             DistortSpec.Shake shake = spec.shake().get();
+            long seed = shake.hashCode() * 31L + index;
             double omega = TAU / ticksToMillis(shake.period());
             dx += shake.amplitude() * rough(millis, omega, seed);
             dy += shake.amplitude() * rough(millis, omega, seed + 0x85EBCA6BL);

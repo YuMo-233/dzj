@@ -1,13 +1,16 @@
 package cn.blockforge.generated.typewritertext.mixin;
 
 import cn.blockforge.generated.typewritertext.DistortRender;
+import cn.blockforge.generated.typewritertext.DistortSpec;
+import cn.blockforge.generated.typewritertext.DistortStyleHolder;
+import net.minecraft.Util;
 import net.minecraft.network.chat.Style;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * 扭曲样式的挂载点：给"正在画的这一个字形"加一点位移。
@@ -22,7 +25,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *   <li>阴影/描边字是在同一段里按 {@code x + 偏移} 画的，所以会跟着一起扭曲。</li>
  * </ul>
  *
- * <p>该内部类是包私有的，只能用 {@code targets} 字符串形式指定目标。
+ * <p>该内部类是包私有的，只能用 {@code targets} 字符串形式指定目标。{@code accept} 返回
+ * {@code boolean}，所以注入器的最后一个参数必须是 {@code CallbackInfoReturnable}。
  */
 @Mixin(targets = "net.minecraft.client.gui.Font$StringRenderOutput")
 public abstract class FontStringRenderOutputMixin {
@@ -40,8 +44,9 @@ public abstract class FontStringRenderOutputMixin {
     private float distort$dy;
 
     @Inject(method = "accept", at = @At("HEAD"))
-    private void distort$apply(int index, Style style, int codePoint, CallbackInfo ci) {
-        DistortRender.Offset offset = DistortRender.at(style, index, this.x);
+    private void distort$apply(int index, Style style, int codePoint, CallbackInfoReturnable<Boolean> cir) {
+        DistortSpec spec = DistortStyleHolder.of(style);
+        DistortRender.Offset offset = DistortRender.at(spec, index, this.x, Util.getMillis());
         this.distort$dx = offset.x();
         this.distort$dy = offset.y();
         this.x += this.distort$dx;
@@ -49,7 +54,7 @@ public abstract class FontStringRenderOutputMixin {
     }
 
     @Inject(method = "accept", at = @At("RETURN"))
-    private void distort$revert(int index, Style style, int codePoint, CallbackInfo ci) {
+    private void distort$revert(int index, Style style, int codePoint, CallbackInfoReturnable<Boolean> cir) {
         this.x -= this.distort$dx;
         this.y -= this.distort$dy;
         this.distort$dx = 0.0f;
