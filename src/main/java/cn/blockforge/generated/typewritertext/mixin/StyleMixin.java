@@ -47,4 +47,30 @@ public abstract class StyleMixin implements TypewriterStyleHolder {
             cir.setReturnValue(false);
         }
     }
+
+    /**
+     * 样式合并时把打字机状态带过去。
+     *
+     * <p>原版 {@code applyTo} 只按原版字段新建/挑一个 Style，隐藏字段不在其中，于是
+     * {@code withStyle(非空样式)} 以及 {@code Component.visit} 里的样式合并都会把打字机丢掉。
+     * 优先级与原版字段一致：{@code this}（被应用的样式）胜过参数（被继承的样式）。
+     *
+     * <p>{@code withColor}/{@code withBold}/{@code applyFormat} 这些逐字段另造样式的方法仍然
+     * 带不上（见 README 的已知限制）。
+     */
+    @Inject(method = "applyTo", at = @At("RETURN"), cancellable = true)
+    private void typewriter$carryState(Style other, CallbackInfoReturnable<Style> cir) {
+        Style result = cir.getReturnValue();
+        if (result == null || TypewriterStyleHolder.of(result) != null) {
+            return;
+        }
+        TypewriterState inherited = this.typewriter$state != null
+                ? this.typewriter$state
+                : TypewriterStyleHolder.of(other);
+        // 带状态的一侧必然不是 EMPTY 单例，此时原版返回的一定是新建实例；
+        // 保留这道身份判断，只为防止以后改坏 copyOf 把数据写进全局单例。
+        if (inherited != null && !result.isEmpty()) {
+            TypewriterStyleHolder.set(result, inherited);
+        }
+    }
 }
