@@ -9,7 +9,7 @@ package cn.blockforge.generated.typewritertext;
  * <p>两种相位基准的分工：
  * <ul>
  *   <li><b>波浪</b>用**像素横坐标**当空间相位，所以它沿着整行连续传播，不受组件被拆成几段影响；</li>
- *   <li><b>漂移/抖动</b>用**参数哈希 + 字符下标**取固定种子，同一段文字每次看到的摆动方式一致，
+ *   <li><b>漂移</b>用**参数哈希 + 字符下标**取固定种子，同一段文字每次看到的摆动方式一致，
  *       不会一帧一个样地闪。</li>
  * </ul>
  *
@@ -54,21 +54,14 @@ public final class DistortRender {
                 dx += value;
             }
         }
-        // 随机类效果的种子只跟"这个效果自己的参数 + 字符下标"有关：这样加一个 shake 不会把
-        // jitter 原本的游动方式改掉，多个效果叠加严格等于各自位移相加。
+        // 种子只跟"这个效果自己的参数 + 字符下标"有关，不掺别的效果：这样叠加时每个效果
+        // 的位移互不干扰，总位移严格等于各自位移相加。
         if (spec.jitter().isPresent()) {
             DistortSpec.Jitter jitter = spec.jitter().get();
             long seed = jitter.hashCode() * 31L + index;
             double omega = TAU / ticksToMillis(jitter.period());
             dx += jitter.radius() * smooth(millis, omega, seed);
             dy += jitter.radius() * smooth(millis, omega, seed + 0x9E3779B9L);
-        }
-        if (spec.shake().isPresent()) {
-            DistortSpec.Shake shake = spec.shake().get();
-            long seed = shake.hashCode() * 31L + index;
-            double omega = TAU / ticksToMillis(shake.period());
-            dx += shake.amplitude() * rough(millis, omega, seed);
-            dy += shake.amplitude() * rough(millis, omega, seed + 0x85EBCA6BL);
         }
         return dx == 0.0 && dy == 0.0 ? Offset.NONE : new Offset((float) dx, (float) dy);
     }
@@ -77,17 +70,13 @@ public final class DistortRender {
         return Math.max(1, ticks) * MILLIS_PER_TICK;
     }
 
-    /** 平滑游动：两个不同频率的正弦叠加，值域约 ±0.9，随种子改变相位。 */
+    /**
+     * 平滑游动：两个不同频率的正弦叠加，值域约 ±0.9，随种子改变相位。
+     * 周期调小就是快速抖动——同一条曲线上取更密的一段，方向反转次数随之上去。
+     */
     private static double smooth(double millis, double omega, long seed) {
         return 0.55 * Math.sin(millis * omega + phase(seed))
                 + 0.35 * Math.sin(millis * omega * 0.37 + phase(seed * 3L + 1L));
-    }
-
-    /** 剧烈抖动：频率更高，并叠一个带折返的波形（{@code b·|b|}）做出"频闪"的毛躁感。 */
-    private static double rough(double millis, double omega, long seed) {
-        double a = Math.sin(millis * omega + phase(seed));
-        double b = Math.sin(millis * omega * 2.3 + phase(seed * 7L + 3L));
-        return 0.65 * a + 0.35 * b * Math.abs(b);
     }
 
     /** 把种子摊成 [0, 2π) 上的相位。 */

@@ -60,9 +60,6 @@ public final class NbtacCompat {
             \t+jitter :compound
             \t\t+radius :double
             \t\t+period :either<int, string>
-            \t+shake :compound
-            \t\t+amplitude :double
-            \t\t+period :either<int, string>
             """;
 
     /** 已经处理完（装上了，或确认没有 nbtac / 结构对不上，不再重试）。 */
