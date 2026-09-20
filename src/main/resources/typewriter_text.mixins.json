@@ -1,0 +1,16 @@
+{
+  "required": false,
+  "package": "cn.blockforge.generated.typewritertext.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "MutableComponentMixin",
+    "StyleMixin",
+    "StyleSerializerMixin"
+  ],
+  "client": [
+    "ChatComponentAccessor"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
