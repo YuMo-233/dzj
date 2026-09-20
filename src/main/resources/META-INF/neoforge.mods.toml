@@ -6,7 +6,7 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 authors="AutoMods"
-description='''打字机文本样式：把“逐字显示”做成原版文本组件样式上的一个字段 typewriter，写法是 {"text":"你好","typewriter":{"time":60}}，不是新的组件类型。凡是能写原版样式字段的地方都能用它：聊天栏、标题、action bar、bossbar、物品名、成书、告示牌等任何显示原版文本组件的位置都能逐字显示；样式按原版语义向下继承（父组件的 typewriter 覆盖它和它的 extra 子组件，连成一段逐字打出）；可选按每打出一个字符静默触发一条指令（无任何回显提示）。'''
+description='''打字机文本样式：把“逐字显示”做成原版文本组件样式上的一个字段 typewriter，写法是 {"text":"你好","typewriter":{"time":"0.2s"}}，不是新的组件类型。凡是能写原版样式字段的地方都能用它：聊天栏、标题、action bar、bossbar、物品名、成书、告示牌等任何显示原版文本组件的位置都能逐字显示；time 是出字速度（每字符多少 tick，也可写 "0.25s"），样式按原版语义向下继承（父组件的 typewriter 覆盖它和它的 extra 子组件，连成一段逐字打出）；可选按每打出一个字符静默触发一条指令（无任何回显提示）。'''
 [[mixins]]
 config="typewriter_text.mixins.json"
 [[dependencies.${mod_id}]]

@@ -1,26 +1,32 @@
 package cn.blockforge.generated.typewritertext;
 
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * 打字机样式携带的数据与运行期状态。
  *
- * <p>从 r8 起打字机不再是“内容类型”，而是组件样式上的一个字段：
+ * <p>打字机不是“内容类型”，而是组件样式上的一个字段：
  *
  * <pre>{@code
- * {"text":"你好，世界","typewriter":{"time":40,"command":"playsound ... %c"}}
+ * {"text":"你好，世界","typewriter":{"time":"0.25s","command":"playsound ... %c"}}
  * }</pre>
  *
  * <p>因为是样式，它可以套在任何原版组件上（{@code text}、{@code translate}、
  * {@code score}、{@code keybind}、{@code selector}、{@code nbt}……），并且按样式的
  * 语义向下继承：父组件带上 {@code typewriter} 后，它和它的 {@code extra} 子组件
  * 会连成一整段文字逐字打出。
+ *
+ * <p>{@code time} 控制的是**出字速度**（相邻两个字符间隔多久），不是整段总时长：
+ * 数字按 tick 计且必须是整数，字符串可以带单位——{@code "0.25s"}（秒，可小数）或
+ * {@code "4t"}（tick）；省略时每字符 {@value #DEFAULT_TICKS_PER_CHAR} tick。
  *
  * <p>这个类既保存序列化字段（{@link #MAP_CODEC}），也保存纯客户端的播放进度
  * （起笔时刻、已揭示字数、已上报字数）。进度不参与序列化；客户端解码样式时会
@@ -31,14 +37,19 @@ public final class TypewriterState {
     /** 组件样式里承载打字机参数的字段名。 */
     public static final String FIELD = "typewriter";
 
-    /** time/interval 都未指定时，每个字符占用的默认 tick 数。 */
+    /** {@code time} 省略时，每个字符占用的默认 tick 数。 */
     public static final int DEFAULT_TICKS_PER_CHAR = 2;
+
+    /** 出字速度上限：每字符 1 tick（20 字/秒）。 */
+    public static final int MIN_TICKS_PER_CHAR = 1;
+    /** 出字速度下限：每字符 200 tick（10 秒一个字）。 */
+    public static final int MAX_TICKS_PER_CHAR = 200;
+
+    /** 1 秒是多少 tick，用于把 {@code "0.25s"} 折算成 tick。 */
+    private static final double TICKS_PER_SECOND = 20.0;
+
     /** 触发指令长度上限。 */
     public static final int MAX_COMMAND = 512;
-    /** 总时长上限（1 小时）。 */
-    public static final int MAX_TIME = 72000;
-    /** 每字符间隔上限（10 秒）。 */
-    public static final int MAX_INTERVAL = 200;
     /** 单段文字可参与逐字的最大字符数（防御异常组件）。 */
     public static final int MAX_CHARS = 65536;
 
@@ -47,23 +58,85 @@ public final class TypewriterState {
                     : DataResult.error(() -> "typewriter command too long (max " + MAX_COMMAND + ")"),
             s -> s);
 
-    private static Codec<Integer> boundedTicks(int max, String name) {
-        return Codec.INT.comapFlatMap(value -> {
-            if (value < 0 || value > max) {
-                return DataResult.error(() -> "typewriter " + name + " must be in 0.." + max + " (got " + value + ")");
-            }
-            return DataResult.success(value);
-        }, value -> value);
+    /** 数字写 tick 时必须整数时的提示语。 */
+    private static final String INTEGRAL_TICK_HINT =
+            "time as a number counts ticks per char and must be a whole number; "
+                    + "write seconds for fractions, e.g. \"0.25s\"";
+
+    /** 秒单位写法（大小写不敏感）。 */
+    private static boolean isSeconds(String unit) {
+        return unit.equals("s") || unit.equals("sec") || unit.equals("second") || unit.equals("seconds");
     }
 
-    /** {@code typewriter} 字段的对象形态；{@code time}/{@code interval} 的 0 一律表示“未指定”。 */
+    /** tick 单位写法（大小写不敏感）；空串表示“没写单位”，同样按 tick 计。 */
+    private static boolean isTicks(String unit) {
+        return unit.isEmpty() || unit.equals("t") || unit.equals("tick") || unit.equals("ticks");
+    }
+
+    /**
+     * {@code time} 字段：数字按 tick 计（整数），字符串可带 {@code t}/{@code s} 单位后缀。
+     * 归一化后存的是“每字符多少 tick”。
+     */
+    private static final Codec<Integer> TICKS_PER_CHAR = Codec.either(Codec.DOUBLE, Codec.STRING)
+            .comapFlatMap(TypewriterState::parseTime, TypewriterState::formatTime);
+
+    /** {@code typewriter} 字段的对象形态；三个字段都可省略。 */
     public static final MapCodec<TypewriterState> MAP_CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
-            boundedTicks(MAX_TIME, "time").optionalFieldOf("time", 0).forGetter(TypewriterState::time),
-            boundedTicks(MAX_INTERVAL, "interval").optionalFieldOf("interval", 0).forGetter(TypewriterState::interval),
-            CAPPED_COMMAND.optionalFieldOf("command", "").forGetter(TypewriterState::command),
+            TICKS_PER_CHAR.optionalFieldOf("time").forGetter(s -> s.ticksPerChar == DEFAULT_TICKS_PER_CHAR
+                    ? Optional.empty()
+                    : Optional.of(s.ticksPerChar)),
+            CAPPED_COMMAND.optionalFieldOf("command").forGetter(s -> s.command.isEmpty()
+                    ? Optional.empty()
+                    : Optional.of(s.command)),
             Codec.STRING.optionalFieldOf("session").forGetter(s -> Optional.of(s.session.toString()))
-    ).apply(i, (time, interval, command, session) -> new TypewriterState(
-            time, interval, command, session.map(TypewriterState::parseUuid).orElseGet(UUID::randomUUID))));
+    ).apply(i, (time, command, session) -> new TypewriterState(
+            time.orElse(DEFAULT_TICKS_PER_CHAR), command.orElse(""),
+            session.map(TypewriterState::parseUuid).orElseGet(UUID::randomUUID))));
+
+    private static DataResult<Integer> parseTime(Either<Double, String> raw) {
+        Double number = raw.left().orElse(null);
+        if (number != null) {
+            return fromTicks(number, INTEGRAL_TICK_HINT);
+        }
+        String text = raw.right().orElse("").trim();
+        int split = 0;
+        while (split < text.length() && !Character.isLetter(text.charAt(split))) {
+            split++;
+        }
+        String amount = text.substring(0, split).trim();
+        String unit = text.substring(split).trim().toLowerCase(Locale.ROOT);
+        double value;
+        try {
+            value = Double.parseDouble(amount);
+        } catch (NumberFormatException e) {
+            return DataResult.error(() -> "typewriter time is not a number: \"" + text + "\"");
+        }
+        if (isSeconds(unit)) {
+            return fromTicks(value * TICKS_PER_SECOND, null);
+        }
+        if (!isTicks(unit)) {
+            return DataResult.error(() -> "typewriter time unit must be t (ticks) or s (seconds), got \"" + unit + "\"");
+        }
+        return fromTicks(value, INTEGRAL_TICK_HINT);
+    }
+
+    /** 归一化成每字符 tick 数并做范围校验；{@code integralHint} 非空时要求整数 tick。 */
+    private static DataResult<Integer> fromTicks(double ticks, String integralHint) {
+        if (integralHint != null && ticks != Math.rint(ticks)) {
+            return DataResult.error(() -> "typewriter " + integralHint);
+        }
+        long rounded = Math.round(ticks);
+        if (rounded < MIN_TICKS_PER_CHAR || rounded > MAX_TICKS_PER_CHAR) {
+            return DataResult.error(() -> "typewriter time must be between " + MIN_TICKS_PER_CHAR
+                    + " and " + MAX_TICKS_PER_CHAR + " ticks per char (got " + rounded + ")");
+        }
+        return DataResult.success((int) rounded);
+    }
+
+    /** 写回 JSON/NBT 的规范形态：一律是带 {@code t} 单位的 tick 数。 */
+    private static Either<Double, String> formatTime(int ticksPerChar) {
+        return Either.right(ticksPerChar + "t");
+    }
 
     private static UUID parseUuid(String raw) {
         try {
@@ -73,8 +146,7 @@ public final class TypewriterState {
         }
     }
 
-    private final int time;
-    private final int interval;
+    private final int ticksPerChar;
     private final String command;
     private final UUID session;
 
@@ -85,9 +157,8 @@ public final class TypewriterState {
     private int reported = 0;
     private boolean finished = false;
 
-    public TypewriterState(int time, int interval, String command, UUID session) {
-        this.time = Math.max(0, Math.min(time, MAX_TIME));
-        this.interval = Math.max(0, Math.min(interval, MAX_INTERVAL));
+    public TypewriterState(int ticksPerChar, String command, UUID session) {
+        this.ticksPerChar = Math.max(MIN_TICKS_PER_CHAR, Math.min(ticksPerChar, MAX_TICKS_PER_CHAR));
         this.command = command == null ? "" : command;
         this.session = session == null ? UUID.randomUUID() : session;
         TypewriterRuntime.markAny();
@@ -98,15 +169,12 @@ public final class TypewriterState {
 
     /** 全默认参数的实例（{@code "typewriter":{}}）。 */
     public static TypewriterState defaults() {
-        return new TypewriterState(0, 0, "", UUID.randomUUID());
+        return new TypewriterState(DEFAULT_TICKS_PER_CHAR, "", UUID.randomUUID());
     }
 
-    public int time() {
-        return time;
-    }
-
-    public int interval() {
-        return interval;
+    /** 出字速度：相邻两个字符间隔多少 tick，越小出字越快。 */
+    public int ticksPerChar() {
+        return ticksPerChar;
     }
 
     public String command() {
@@ -126,8 +194,8 @@ public final class TypewriterState {
     // ------------------------------------------------------------------
 
     /**
-     * 每次渲染遍历前调用一次：按 {@code time}/{@code interval} 与这一遍统计到的
-     * 总字数算出“现在应该显示到第几个字符”。进度只增不减。
+     * 每次渲染遍历前调用一次：按出字速度与这一遍统计到的总字数，算出“现在应该显示到第几个
+     * 字符”。进度只增不减。
      */
     synchronized void beginPass(int total) {
         this.totalChars = total;
@@ -139,13 +207,9 @@ public final class TypewriterState {
         if (startNanos < 0L) {
             startNanos = System.nanoTime();
         }
-        int ticks = time > 0
-                ? time
-                : Math.max(1, total * (interval > 0 ? interval : DEFAULT_TICKS_PER_CHAR));
-        long elapsed = Math.max(0L, (System.nanoTime() - startNanos) / 50_000_000L);
-        int target = elapsed >= ticks
-                ? total
-                : (int) Math.min(total, (elapsed * (long) total + ticks - 1L) / ticks);
+        // 起笔后的第 1 个 tick 内就吐出第一个字，之后每 ticksPerChar 个 tick 吐一个字
+        double elapsedTicks = Math.max(0L, System.nanoTime() - startNanos) / 50_000_000.0;
+        int target = (int) Math.min(total, Math.ceil(elapsedTicks / ticksPerChar));
         if (revealed < 0) {
             revealed = 0;
         }
@@ -183,7 +247,7 @@ public final class TypewriterState {
 
     @Override
     public String toString() {
-        return "TypewriterState[time=" + time + ", interval=" + interval
+        return "TypewriterState[ticksPerChar=" + ticksPerChar
                 + ", command=" + (command.isEmpty() ? "-" : "yes") + "]";
     }
 }

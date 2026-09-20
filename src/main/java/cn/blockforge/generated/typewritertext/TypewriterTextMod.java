@@ -14,14 +14,15 @@ import org.slf4j.LoggerFactory;
  *
  * <p>任何原版组件都可以带这个样式，例如：
  * <pre>
- * /tellraw @a ["任务开始：", {"text":"寻找三块红石","color":"gold","typewriter":{"time":60}}]
- * /title @a title {"text":"BOSS 登场","color":"dark_red","bold":true,"typewriter":{"interval":3}}
+ * /tellraw @a ["任务开始：", {"text":"寻找三块红石","color":"gold","typewriter":{"time":"0.25s"}}]
+ * /title @a title {"text":"BOSS 登场","color":"dark_red","bold":true,"typewriter":{"time":3}}
  * </pre>
  *
  * <p>{@code typewriter} 对象里的字段（都可省略）：
  * <ul>
- *   <li>{@code time}：总时长（tick）；缺省按每字符 2 tick，也可用 {@code interval}
- *       直接指定每字符 tick 数；</li>
+ *   <li>{@code time}：出字速度——相邻两个字符间隔多久，数值越小出字越快。数字按 tick 计
+ *       且必须是整数；字符串可带单位，{@code "0.25s"}（秒，可小数）或 {@code "4t"}（tick）。
+ *       范围 1–200 tick，缺省每字符 2 tick；</li>
  *   <li>{@code command}：每打出一个字符触发一次的指令，占位符 {@code %c}（当前字符）、
  *       {@code %i}（序号）、{@code %n}（总字数）；以观看者身份、权限封顶 2 级、
  *       <b>完全静默</b>执行——指令自身给执行者的回显（如 {@code /playsound} 的

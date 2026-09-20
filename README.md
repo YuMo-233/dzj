@@ -2,7 +2,7 @@
 
 逐字显示不是新的组件类型，也不新加指令，而是**原版文本组件样式上的一个字段**：
 
-    {"text":"你好，世界","typewriter":{"time":40}}
+    {"text":"你好，世界","typewriter":{"time":"0.2s"}}
 
 凡是能写原版样式字段（`color`、`bold`、`clickEvent`、`hoverEvent`、`insertion`……）的地方
 都能写 `typewriter`；文字内容完全走原版组件（`text`、`translate`、`score`、`nbt`、
@@ -14,12 +14,12 @@
 
 | 字段 | 含义 |
 |---|---|
-| `time` | **总时长，单位 tick（20 tick = 1 秒）**；省略时按每字符 2 tick |
-| `interval` | 或者直接指定每字符多少 tick，与 `time` 二选一（`time` 优先） |
+| `time` | **出字速度：相邻两个字符间隔多久**，数值越小出字越快。数字按 tick 计（整数），字符串可带单位：`"0.25s"`（秒，可小数）、`"4t"`（tick）；省略时每字符 2 tick |
 | `command` | **每打出一个字符触发一次**的指令，不带前导斜杠。占位符 `%c` 当前字符、`%i` 序号、`%n` 总字数，上限 512 字符 |
 | `session` | 可省略，省略时自动生成并随组件一起序列化（双端一致，用于配对指令回报） |
 
-上限：`time` ≤ 72000、`interval` ≤ 200。样式按原版语义向下继承——父组件写了
+`time` 范围 **1–200 tick**（最快每秒 20 字，最慢每字 10 秒）；不带单位的数字只接受整数，
+`{"time":0.5}` 会被拒掉，要写 `{"time":"0.5s"}`。样式按原版语义向下继承——父组件写了
 `typewriter`，它和它的 `extra` 子组件会**连成一整段文字一起逐字打出**。
 
 `command` 以**观看者身份、权限封顶 2 级、完全静默**执行：指令自身给执行者的回显
@@ -27,35 +27,39 @@
 
 ## 用法示例（把下面的内容直接写进指令参数）
 
-逐字打字，4 秒打完：
+逐字打字，每秒 5 个字（每个字 0.2 秒）：
 
-    tellraw @a {"text":"任务开始：在废墟里找到三块红石。","color":"gold","typewriter":{"time":80}}
+    tellraw @a {"text":"任务开始：在废墟里找到三块红石。","color":"gold","typewriter":{"time":"0.2s"}}
+
+同样的速度也可以直接按 tick 写（0.2 秒 = 4 tick），两种写法等价：
+
+    tellraw @a {"text":"任务开始：在废墟里找到三块红石。","color":"gold","typewriter":{"time":4}}
 
 和原版组件混用（前半截普通文本立刻显示，后半截逐字打）：
 
-    tellraw @a ["【公告】 ",{"text":"服务器将于十分钟后重启","color":"red","bold":true,"typewriter":{"time":60}}]
+    tellraw @a ["【公告】 ",{"text":"服务器将于十分钟后重启","color":"red","bold":true,"typewriter":{"time":4}}]
 
 写成一段两句话的串烧——`typewriter` 写在父组件上，子组件跟着一起打：
 
-    tellraw @a {"text":"任务开始：","color":"gold","typewriter":{"time":60},"extra":[{"text":"在废墟里找到三块红石。"},{"text":"限时十分钟。","color":"red"}]}
+    tellraw @a {"text":"任务开始：","color":"gold","typewriter":{"time":"0.15s"},"extra":[{"text":"在废墟里找到三块红石。"},{"text":"限时十分钟。","color":"red"}]}
 
-每打一个字符响一声（打字机音效）：
+每打一个字符响一声（打字机音效，这里打得很急）：
 
-    tellraw @a {"text":"叮叮叮……","typewriter":{"time":40,"command":"playsound minecraft:block.note_block.hat master @s ~ ~ ~ 0.15 1.6"}}
+    tellraw @a {"text":"叮叮叮……","typewriter":{"time":"0.1s","command":"playsound minecraft:block.note_block.hat master @s ~ ~ ~ 0.15 1.6"}}
 
 标题、动作栏、bossbar 同样可用：
 
-    title @a title {"text":"BOSS 登场","color":"dark_red","bold":true,"typewriter":{"time":40}}
-    title @a actionbar {"text":"正在解析古代铭文……","typewriter":{"time":60}}
-    bossbar add quest {"text":"古代铭文","typewriter":{"time":40}}
+    title @a title {"text":"BOSS 登场","color":"dark_red","bold":true,"typewriter":{"time":"0.25s"}}
+    title @a actionbar {"text":"正在解析古代铭文……","typewriter":{"time":3}}
+    bossbar add quest {"text":"古代铭文","typewriter":{"time":4}}
 
 写进数据组件（物品名、lore 也会逐字显示）：
 
-    give @a netherite_sword[custom_name='{"text":"会低语的剑","color":"light_purple","typewriter":{"time":40}}']
+    give @a netherite_sword[custom_name='{"text":"会低语的剑","color":"light_purple","typewriter":{"time":"0.25s"}}']
 
 也可以用翻译键取词（`with` 里的参数会展平成文字一起参与逐字显示）：
 
-    tellraw @a {"translate":"chat.type.text","with":["Steve","醒了。"],"typewriter":{"time":40}}
+    tellraw @a {"translate":"chat.type.text","with":["Steve","醒了。"],"typewriter":{"time":4}}
 
 ## 附加指令（可选，打字机本身不依赖它）
 
@@ -68,12 +72,16 @@
 
 r7 的写法（组件内容类型）**在 r8 不再支持**，按下表改写：
 
-| r7 | r8 |
+| r7 | r8 及以后 |
 |---|---|
-| `{"type":"typewriter_text:typewriter","text":"…","time":80,"color":"gold"}` | `{"text":"…","color":"gold","typewriter":{"time":80}}` |
+| `{"type":"typewriter_text:typewriter","text":"…","time":80,"color":"gold"}` | `{"text":"…","color":"gold","typewriter":{"time":"0.2s"}}` |
 
 `translate`/`with` 同理：不再是组件类型，而是随便挑一个原版组件（`text`、`translate`……）
 再挂上 `typewriter` 字段。
+
+**r9 起 `time` 的含义变了**：r8 里它是"整段总时长"，r9 起是"每字符间隔"，`interval`
+字段同时被删掉（见 [0005](docs/adr/0005-出字速度按每字符tick计并支持单位后缀.md)）。
+同一个 `{"time":80}`，改前是"整段 4 秒打完"，改后是"每个字 4 秒"，写旧值时留意一下。
 
 ## 模组开发者 API
 

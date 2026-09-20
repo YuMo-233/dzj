@@ -21,7 +21,7 @@ import java.util.UUID;
  * <pre>{@code
  * Component msg = TypewriterSpec.builder()
  *         .text("任务开始……")
- *         .time(60)
+ *         .time(2)
  *         .command("playsound minecraft:block.note_block.hat master @s ~ ~ ~ 0.2 1.5")
  *         .withStyle(ChatFormatting.GOLD)
  *         .build();
@@ -65,8 +65,7 @@ public final class TypewriterSpec {
         private String text = "";
         private String translateKey = "";
         private final List<Component> translateArgs = new ArrayList<>();
-        private int time;
-        private int interval;
+        private int ticksPerChar = TypewriterState.DEFAULT_TICKS_PER_CHAR;
         private String command = "";
         private final List<Component> extra = new ArrayList<>();
         private Style style = Style.EMPTY;
@@ -85,15 +84,10 @@ public final class TypewriterSpec {
             return this;
         }
 
-        /** 总时长（tick）。0 表示未指定，缺省按每字符 2 tick。 */
-        public Builder time(int ticks) {
-            this.time = Math.max(0, Math.min(ticks, TypewriterState.MAX_TIME));
-            return this;
-        }
-
-        /** 每字符 tick 数。0 表示未指定（与 time 二选一）。 */
-        public Builder interval(int ticksPerChar) {
-            this.interval = Math.max(0, Math.min(ticksPerChar, TypewriterState.MAX_INTERVAL));
+        /** 出字速度：相邻两个字符间隔多少 tick（{@code 1}–{@code 200}，越小出字越快）。 */
+        public Builder time(int ticksPerChar) {
+            this.ticksPerChar = Math.max(TypewriterState.MIN_TICKS_PER_CHAR,
+                    Math.min(ticksPerChar, TypewriterState.MAX_TICKS_PER_CHAR));
             return this;
         }
 
@@ -124,7 +118,7 @@ public final class TypewriterSpec {
 
         /** 产出组件：打字机数据挂在样式上，内容与子组件完全走原版通道。 */
         public MutableComponent build() {
-            TypewriterState state = new TypewriterState(time, interval, command, UUID.randomUUID());
+            TypewriterState state = new TypewriterState(ticksPerChar, command, UUID.randomUUID());
             Style styled = TypewriterStyleCodec.attach(style, state);
             MutableComponent component = translateKey.isEmpty()
                     ? Component.literal(text)
