@@ -10,7 +10,8 @@
   "client": [
     "ChatComponentAccessor",
     "FontRenderCharMixin",
-    "FontStringRenderOutputMixin"
+    "FontStringRenderOutputMixin",
+    "StringUtilMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -117,12 +117,13 @@
     §$神奇的文字§r又安静了
     tellraw @a {"text":"§$它在水中§同样飘着"}
 
-⚠️ 和原版 `§` 色码一样，**UI 输入框打不进 `§`**（聊天、书、存档名输入框都会过滤它）：主要靠
-命令 JSON、`/data`、`level.dat` 文件这类数据通道写入。
+本模组在**客户端放行了 `§` 输入**（`StringUtil.isAllowedChatCharacter`）：存档名、书、
+告示牌、聊天、命令框都能直接打 `§$`。数据里保留 `§` 码原样，显示时才被解析成效果。
+⚠️ 专用服务器的聊天仍按原版过滤 `§`（那是服务端行为），其他文本通道不受影响。
 
 改当前存档在世界列表里的名字（写进 `level.dat → LevelName`，`&` 当转义）:
 
-    /typewriter worldname &我的存档&r普通后缀
+    /typewriter worldname &$我的存档&r普通后缀
 
 ## 命令补全（NBT Autocomplete）
 

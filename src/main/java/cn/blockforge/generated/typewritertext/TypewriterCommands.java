@@ -9,11 +9,14 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.ComponentArgument;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.storage.WorldData;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -86,7 +89,9 @@ public final class TypewriterCommands {
      * 其余字符原样。名字只在渲染时被解析成效果，数据里保留 {@code §} 码。
      *
      * <p>{@code LevelName} 存在 {@code PrimaryLevelData → LevelSettings.levelName}（final 字段），
-     * {@code WorldData} 接口只给 getter 没有 setter，所以这里用反射改字段后落盘。
+     * {@code WorldData} 接口只给 getter 没有 setter，所以反射改字段，然后<b>直接同步调用
+     * {@code LevelStorageAccess.saveDataTag} 写 level.dat</b>——不依赖 {@code saveAllChunks}
+     * 那条又长又可能在保存中途出错的链路，写没写进去由回显告诉你。
      */
     private static int worldname(CommandContext<CommandSourceStack> context) {
         CommandSourceStack source = context.getSource();
@@ -94,16 +99,22 @@ public final class TypewriterCommands {
         String stored = translate(StringArgumentType.getString(context, "name"));
         try {
             LevelSettings settings = server.getWorldData().getLevelSettings();
-            Field field = LevelSettings.class.getDeclaredField("levelName");
-            field.setAccessible(true);
-            field.set(settings, stored);
-            // 界面上世界名是客户端世界列表读 level.dat 渲染的，服务端改完直接存盘即可
-            server.saveAllChunks(false, false, false);
+            Field levelNameField = LevelSettings.class.getDeclaredField("levelName");
+            levelNameField.setAccessible(true);
+            levelNameField.set(settings, stored);
+
+            Field storage = MinecraftServer.class.getDeclaredField("storageSource");
+            storage.setAccessible(true);
+            Object access = storage.get(server); // LevelStorageSource.LevelStorageAccess
+            access.getClass()
+                    .getMethod("saveDataTag", RegistryAccess.class, WorldData.class, CompoundTag.class)
+                    .invoke(access, server.registryAccess(), server.getWorldData(),
+                            server.getPlayerList().getSingleplayerData());
         } catch (Throwable t) {
             source.sendFailure(Component.literal("改存档名失败：" + t));
             return 0;
         }
-        source.sendSuccess(() -> Component.literal("存档名称已改为：" + stored), true);
+        source.sendSuccess(() -> Component.literal("存档名称已改为：" + stored + "（已保存到 level.dat）"), true);
         return 1;
     }
 
