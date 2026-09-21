@@ -120,6 +120,10 @@
 ⚠️ 和原版 `§` 色码一样，**UI 输入框打不进 `§`**（聊天、书、存档名输入框都会过滤它）：主要靠
 命令 JSON、`/data`、`level.dat` 文件这类数据通道写入。
 
+改当前存档在世界列表里的名字（写进 `level.dat → LevelName`，`&` 当转义）:
+
+    /typewriter worldname &我的存档&r普通后缀
+
 ## 命令补全（NBT Autocomplete）
 
 装了 [NBT Autocomplete](https://modrinth.com/mod/nbt-autocomplete)（modid `nbtac`）时，
