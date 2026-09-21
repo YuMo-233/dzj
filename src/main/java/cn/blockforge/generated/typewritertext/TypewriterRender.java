@@ -2,6 +2,7 @@ package cn.blockforge.generated.typewritertext;
 
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 
 import java.util.IdentityHashMap;
@@ -92,7 +93,7 @@ public final class TypewriterRender {
      * （那会把样式和案例污染给所有引用它的组件）。用 {@link TypewriterStyleCodec#copyOf}
      * 反射造一份“字段全空但不是单例”的副本再挂；反射不可用就放弃带 § 效果，宁可字面显示。
      */
-    private static Style withSpec(Style style, DistortSpec spec) {
+    public static Style withSpec(Style style, DistortSpec spec) {
         if (spec == null) {
             return style;
         }
@@ -121,6 +122,30 @@ public final class TypewriterRender {
         return on
                 ? (wave.isPresent() ? new DistortSpec(wave, java.util.Optional.empty()) : null)
                 : new DistortSpec(wave, DistortSpec.jitterOnly().jitter());
+    }
+
+    /**
+     * 把一段<b>可能含 § 码的纯字符串</b>转成可绘制序列——给不走 {@code Component.visit} 的
+     * String 渲染路径用（如世界列表：{@code GuiGraphics.drawString(Font, String, ...)}）。
+     * 扫描方式与 {@link SectionFormat} 一致：{@code §$} 波浪、{@code §^} 抖动、{@code §r} 全关，
+     * 标记不产生字符，拆出的每段各挂一份专属样式副本。
+     */
+    public static MutableComponent visitText(String text, Style base) {
+        DistortSpec spec = DistortStyleHolder.of(base);
+        MutableComponent root = Component.empty();
+        for (SectionFormat.Token token : SectionFormat.scan(text)) {
+            switch (token.kind()) {
+                case TEXT -> {
+                    if (!token.text().isEmpty()) {
+                        root.append(Component.literal(token.text()).withStyle(withSpec(base, spec)));
+                    }
+                }
+                case WAVE -> spec = toggle(spec, true);
+                case JITTER -> spec = toggle(spec, false);
+                case RESET -> spec = null;
+            }
+        }
+        return root;
     }
 
     /** 组件树里是否带打字机样式（决定渲染缓存要不要旁路）。 */

@@ -11,6 +11,7 @@
     "ChatComponentAccessor",
     "FontRenderCharMixin",
     "FontStringRenderOutputMixin",
+    "GuiGraphicsStringMixin",
     "StringUtilMixin"
   ],
   "injectors": {
