@@ -34,6 +34,8 @@ import java.util.Collection;
  * {@code /typewriter} 是 {@code /tw} 的同义长名。
  */
 public final class TypewriterCommands {
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("typewriter_text");
+
     private TypewriterCommands() {
     }
 
@@ -98,10 +100,17 @@ public final class TypewriterCommands {
         MinecraftServer server = source.getServer();
         String stored = translate(StringArgumentType.getString(context, "name"));
         try {
-            LevelSettings settings = server.getWorldData().getLevelSettings();
+            // getLevelSettings() 每次返回 settings.copy()，改它不会碰到真身——
+            // 必须反射拿 PrimaryLevelData 的 settings 字段再改。
+            Object worldData = server.getWorldData(); // PrimaryLevelData
+            Field settingsField = worldData.getClass().getDeclaredField("settings");
+            settingsField.setAccessible(true);
+            LevelSettings settings = (LevelSettings) settingsField.get(worldData);
             Field levelNameField = LevelSettings.class.getDeclaredField("levelName");
             levelNameField.setAccessible(true);
             levelNameField.set(settings, stored);
+            LOGGER.info("[worldname] 内存 after set: getLevelName()={} / real settings levelName()={}",
+                    server.getWorldData().getLevelName(), settings.levelName());
 
             Field storage = MinecraftServer.class.getDeclaredField("storageSource");
             storage.setAccessible(true);
@@ -110,7 +119,9 @@ public final class TypewriterCommands {
                     .getMethod("saveDataTag", RegistryAccess.class, WorldData.class, CompoundTag.class)
                     .invoke(access, server.registryAccess(), server.getWorldData(),
                             server.getPlayerList().getSingleplayerData());
+            LOGGER.info("[worldname] saveDataTag 调用完成");
         } catch (Throwable t) {
+            LOGGER.warn("[worldname] 失败", t);
             source.sendFailure(Component.literal("改存档名失败：" + t));
             return 0;
         }

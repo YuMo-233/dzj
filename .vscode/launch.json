@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Client",
+      "presentation": {
+        "group": "Mod Development - blockforge-generated",
+        "order": 0
+      },
+      "projectName": "blockforge-generated",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\app\\dzj\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\app\\dzj\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dtypewriter_text%%D:\\app\\dzj\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "Server",
+      "presentation": {
+        "group": "Mod Development - blockforge-generated",
+        "order": 1
+      },
+      "projectName": "blockforge-generated",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@D:\\app\\dzj\\build\\moddev\\serverRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@D:\\app\\dzj\\build\\moddev\\serverRunVmArgs.txt",
+        "-Dfml.modFolders\u003dtypewriter_text%%D:\\app\\dzj\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    }
+  ]
+}
