@@ -57,6 +57,7 @@ public final class NbtacCompat {
             \t\t+period :either<int, string>
             \t\t+wavelength :int
             \t\t+direction :Enum(x, y)
+            \t\t+tilt :double
             \t+jitter :compound
             \t\t+radius :double
             \t\t+period :either<int, string>

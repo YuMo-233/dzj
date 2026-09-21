@@ -24,6 +24,13 @@ final class DistortParams {
                 : DataResult.error(() -> label + " must be in 0.1..32 (got " + v + ")"));
     }
 
+    /** 倾斜角上限（度）：0（不倾斜）–45。 */
+    static Codec<Double> tilt(String label) {
+        return Codec.DOUBLE.validate(v -> v >= 0.0 && v <= 45.0
+                ? DataResult.success(v)
+                : DataResult.error(() -> label + " must be in 0..45 degrees (got " + v + ")"));
+    }
+
     /** 波浪方向：{@code "y"}（默认，上下摆）/ {@code "x"}（左右摆），大小写不敏感。 */
     static Codec<Boolean> direction() {
         return Codec.STRING.comapFlatMap(raw -> switch (raw.trim().toLowerCase(Locale.ROOT)) {

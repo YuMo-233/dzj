@@ -66,6 +66,31 @@ public final class DistortRender {
         return dx == 0.0 && dy == 0.0 ? Offset.NONE : new Offset((float) dx, (float) dy);
     }
 
+    /**
+     * 波浪的倾斜角（弧度）：跟随位移沿行方向的斜率——字会顺着波形往凸起那一侧歪；
+     * {@code tilt}（度）是角度上限，0 = 不倾斜。{@code spec} 无波浪时返回 0。
+     */
+    public static float tiltRadians(DistortSpec spec, float cursorX, double millis) {
+        if (spec == null || spec.wave().isEmpty()) {
+            return 0.0f;
+        }
+        DistortSpec.Wave wave = spec.wave().get();
+        double cap = clamp(wave.tilt(), 0.0, 45.0);
+        if (cap == 0.0) {
+            return 0.0f;
+        }
+        // d(位移)/d(像素横坐标) = amplitude × 2π/wavelength × cos(phase)；倾斜角取其反正切
+        double k = wave.amplitude() * TAU / Math.max(1, wave.wavelength());
+        double phase = TAU * (millis / ticksToMillis(wave.period()) + cursorX / wave.wavelength());
+        double angle = Math.atan(k * Math.cos(phase));
+        double limit = Math.toRadians(clamp(cap, 0.0, 45.0));
+        return (float) clamp(angle, -limit, limit);
+    }
+
+    private static double clamp(double v, double lo, double hi) {
+        return v < lo ? lo : Math.min(v, hi);
+    }
+
     private static double ticksToMillis(int ticks) {
         return Math.max(1, ticks) * MILLIS_PER_TICK;
     }

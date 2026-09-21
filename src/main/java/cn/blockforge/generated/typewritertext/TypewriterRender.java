@@ -51,7 +51,30 @@ public final class TypewriterRender {
     /** 与 {@code Component.visit(StyledContentConsumer, Style)} 的默认实现逐行等价，不做任何切片。 */
     public static <T> Optional<T> plain(Component component, FormattedText.StyledContentConsumer<T> consumer, Style inherited) {
         Style merged = component.getStyle().applyTo(inherited);
-        Optional<T> result = component.getContents().visit(consumer, merged);
+        Optional<T> result = component.getContents().visit((style, text) -> {
+            if (!SectionFormat.contains(text)) {
+                return consumer.accept(style, text);
+            }
+            // § 码拆段：§$ 波浪 / §^ 抖动（各效果独立开关、同标记再遇关闭），§r 全关。
+            // § 码不产生可见字符，分段互不重叠，所以各段可以各自独立接受。
+            DistortSpec spec = DistortStyleHolder.of(style);
+            for (SectionFormat.Token token : SectionFormat.scan(text)) {
+                switch (token.kind()) {
+                    case TEXT -> {
+                        if (!token.text().isEmpty()) {
+                            Optional<T> partial = consumer.accept(withSpec(style, spec), token.text());
+                            if (partial.isPresent()) {
+                                return partial;
+                            }
+                        }
+                    }
+                    case WAVE -> spec = toggle(spec, true);
+                    case JITTER -> spec = toggle(spec, false);
+                    case RESET -> spec = null;
+                }
+            }
+            return Optional.empty();
+        }, merged);
         if (result.isPresent()) {
             return result;
         }
@@ -62,6 +85,42 @@ public final class TypewriterRender {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * 给段落用样式：§ 码产生的每个效果都是“这份样式的专属副本”，绝不能直接写在共享实例上
+     * （那会把样式和案例污染给所有引用它的组件）。用 {@link TypewriterStyleCodec#copyOf}
+     * 反射造一份“字段全空但不是单例”的副本再挂；反射不可用就放弃带 § 效果，宁可字面显示。
+     */
+    private static Style withSpec(Style style, DistortSpec spec) {
+        if (spec == null) {
+            return style;
+        }
+        Style copy = TypewriterStyleCodec.copyOf(style);
+        if (copy == null) {
+            return style;
+        }
+        DistortStyleHolder.set(copy, spec);
+        return copy;
+    }
+
+    /**
+     * § 码的开关：波浪与抖动各自独立，同一效果的 § 标记在“默认参数”与“无”之间切换；
+     * 切回“无”时，样式字段里原来带的那份同效果也会被一起关掉（§ 码对该效果拥有最终决定权）。
+     */
+    private static DistortSpec toggle(DistortSpec current, boolean waveEffect) {
+        if (waveEffect) {
+            boolean on = current != null && current.wave().isPresent();
+            java.util.Optional<DistortSpec.Jitter> jitter = current != null ? current.jitter() : java.util.Optional.empty();
+            return on
+                    ? (jitter.isPresent() ? new DistortSpec(java.util.Optional.empty(), jitter) : null)
+                    : new DistortSpec(DistortSpec.waveOnly().wave(), jitter);
+        }
+        boolean on = current != null && current.jitter().isPresent();
+        java.util.Optional<DistortSpec.Wave> wave = current != null ? current.wave() : java.util.Optional.empty();
+        return on
+                ? (wave.isPresent() ? new DistortSpec(wave, java.util.Optional.empty()) : null)
+                : new DistortSpec(wave, DistortSpec.jitterOnly().jitter());
     }
 
     /** 组件树里是否带打字机样式（决定渲染缓存要不要旁路）。 */

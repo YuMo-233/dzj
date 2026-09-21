@@ -28,8 +28,11 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter) {
     /** 组件样式里承载扭曲参数的字段名。 */
     public static final String FIELD = "distort";
 
-    /** 波浪：位移 = amplitude × sin(2π × (时间/period + 像素横坐标/wavelength))。 */
-    public record Wave(double amplitude, int period, int wavelength, boolean vertical) {
+    /**
+     * 波浪：位移 = amplitude × sin(2π × (时间/period + 像素横坐标/wavelength))；
+     * 字形倾斜角 = atan(位移沿传播方向的斜率)，用 {@code tilt}（度）当上限截断，0 = 不倾斜。
+     */
+    public record Wave(double amplitude, int period, int wavelength, boolean vertical, double tilt) {
         static final MapCodec<Wave> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
                 DistortParams.pixels("typewriter wave amplitude").optionalFieldOf("amplitude", 2.0).forGetter(Wave::amplitude),
                 StyleTicks.bounded("typewriter wave period", 1, 1200)
@@ -38,8 +41,14 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter) {
                                 ? DataResult.success(v)
                                 : DataResult.error(() -> "typewriter wave wavelength must be in 1..512 (got " + v + ")"))
                         .optionalFieldOf("wavelength", 24).forGetter(Wave::wavelength),
-                DistortParams.direction().optionalFieldOf("direction", Boolean.TRUE).forGetter(Wave::vertical)
+                DistortParams.direction().optionalFieldOf("direction", Boolean.TRUE).forGetter(Wave::vertical),
+                DistortParams.tilt("typewriter wave tilt").optionalFieldOf("tilt", 0.0).forGetter(Wave::tilt)
         ).apply(i, Wave::new));
+
+        /** § 码开波浪时用的默认参数（与字段默认值一致）。 */
+        static Wave defaults() {
+            return new Wave(2.0, 20, 24, true, 0.0);
+        }
     }
 
     /** 漂移：在自己半径内游动，随机但平滑；`period` 调小就变成快速抖动。 */
@@ -49,6 +58,11 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter) {
                 StyleTicks.bounded("typewriter jitter period", 1, 1200)
                         .optionalFieldOf("period", 50).forGetter(Jitter::period)
         ).apply(i, Jitter::new));
+
+        /** § 码开抖动时用的默认参数（与字段默认值一致）。 */
+        static Jitter defaults() {
+            return new Jitter(1.5, 50);
+        }
     }
 
     public static final MapCodec<DistortSpec> MAP_CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
@@ -59,5 +73,15 @@ public record DistortSpec(Optional<Wave> wave, Optional<Jitter> jitter) {
     /** 两个效果都没写：等同没有扭曲样式。 */
     public boolean isEmpty() {
         return wave.isEmpty() && jitter.isEmpty();
+    }
+
+    /** § 码开波浪：只有默认参数的波浪。 */
+    static DistortSpec waveOnly() {
+        return new DistortSpec(Optional.of(Wave.defaults()), Optional.empty());
+    }
+
+    /** § 码开抖动：只有默认参数的抖动。 */
+    static DistortSpec jitterOnly() {
+        return new DistortSpec(Optional.empty(), Optional.of(Jitter.defaults()));
     }
 }
